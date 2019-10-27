@@ -1,9 +1,8 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 const TodoListItemSchema = mongoose.Schema({
   todo: {
     type: String,
-    required: true,
-    unique: true
+    required: true
   },
   completed: {
     type: Boolean,
@@ -22,4 +21,4 @@ const TodoListSchema = mongoose.Schema({
   items: [TodoListItemSchema]
 });
 
-module.exports = mongoose.model("todo-list", TodoListSchema);
+module.exports = mongoose.model('todo-list', TodoListSchema);

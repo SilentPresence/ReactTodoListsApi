@@ -1,33 +1,63 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, Fragment } from 'react';
+import { Link } from 'react-router-dom';
 import Preloader from '../layout/Preloader';
-import axios from 'axios';
-
-const TodoLists = () => {
-  const [todoLists, setTodoLists] = useState([]);
-  const [loading, setLoading] = useState(false);
-
+import TodoListsItem from './TodoListsItem';
+import { connect } from 'react-redux';
+import PropTypes from 'prop-types';
+import { getTodoLists } from '../../actions/todoListsActions';
+import M from 'materialize-css/dist/js/materialize.min.js';
+const TodoLists = ({
+  todoLists: { todoLists, loading, toastMessage },
+  getTodoLists
+}) => {
   useEffect(() => {
     getTodoLists();
+  }, [getTodoLists]);
+  useEffect(() => {
+    M.AutoInit();
   }, []);
-  const getTodoLists = async () => {
-    setLoading(true);
-    const todoLists = await axios.get('/api/todo-lists');
-    setTodoLists(todoLists.data);
-    setLoading(false);
-  };
-  if (loading) {
+  useEffect(() => {
+    if (toastMessage) {
+      M.toast({ html: toastMessage });
+    }
+  }, [toastMessage]);
+  if (loading || !todoLists) {
     return <Preloader />;
   }
+
   return (
-    <ul className='collection with-header'>
-      <li className='collection-header'>Todo Lists</li>
-      {todoLists.length === 0 ? (
-        <p className='center'>Nothing to do yet</p>
-      ) : (
-        todoLists.map(todoList => <li>{todoList.title}</li>)
-      )}
-    </ul>
+    <Fragment>
+      <ul className='collection with-header'>
+        <li className='collection-header'>
+          <div className='center'>Todo Lists</div>
+        </li>
+        {todoLists.length === 0 ? (
+          <p className='center'>Nothing to do yet</p>
+        ) : (
+          todoLists.map(todoList => (
+            <TodoListsItem key={todoList._id} todoList={todoList} />
+          ))
+        )}
+      </ul>
+      <div className='fixed-action-btn'>
+        <Link
+          to='/todo'
+          className='btn-floating btn-large waves-effect waves-light indigo'
+        >
+          <i className='material-icons'>add</i>
+        </Link>
+      </div>
+    </Fragment>
   );
 };
-
-export default TodoLists;
+TodoLists.propTypes = {
+  todoLists: PropTypes.object.isRequired,
+  getTodoLists: PropTypes.func.isRequired
+};
+const mapStateToProps = state => ({
+  todoLists: state.todoLists
+});
+export default connect(
+  mapStateToProps,
+  { getTodoLists }
+)(TodoLists);

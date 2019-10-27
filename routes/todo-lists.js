@@ -1,23 +1,23 @@
-const express = require("express");
-const mongoose = require("mongoose");
+const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
-const { sanitize, check, validationResult } = require("express-validator");
-const TodoList = require("../models/TodoList");
+const { sanitize, check, validationResult } = require('express-validator');
+const TodoList = require('../models/TodoList');
 const sanitizerHandlers = [
-  sanitize("title")
+  sanitize('title')
     .customSanitizer(input => {
       if (input) {
-        return input.replace(/\s\s+/g, " ");
+        return input.replace(/\s\s+/g, ' ');
       }
       return input;
     })
     .trim()
     .escape()
     .stripLow(),
-  sanitize("items.*.todo")
+  sanitize('items.*.todo')
     .customSanitizer(input => {
       if (input) {
-        return input.replace(/\s\s+/g, " ");
+        return input.replace(/\s\s+/g, ' ');
       }
       return input;
     })
@@ -25,66 +25,82 @@ const sanitizerHandlers = [
     .escape()
     .stripLow()
 ];
-const validationHandlers = [
-  check("title", "Title is required")
+const commonValidationHandlers = [
+  check('title', 'Title is required')
     .not()
     .isEmpty(),
-  check("title", "There is already a list with this title").custom(
+  check('items', 'List must have items').isArray({ min: 1 }),
+  check('items.*.todo', 'Todo item cannot be empty')
+    .not()
+    .isEmpty(),
+  check('items', 'There are duplicate todo items').custom(async input => {
+    const todosCounts = input
+      .map(x => x.todo)
+      .reduce((todoCount, todo) => {
+        const count = todoCount[todo] || 0;
+        todoCount[todo] = count + 1;
+        return todoCount;
+      }, {});
+    const keys = Object.keys(todosCounts);
+    for (const key of keys) {
+      if (todosCounts[key] > 1) {
+        return Promise.reject();
+      }
+    }
+  })
+];
+const addValidationHandlers = [
+  check('title', 'There is already a list with this title').custom(
     async input => {
-      const todoList = await TodoList.find({ title: input });
+      const todoList = await TodoList.find({
+        title: input
+      });
       if (todoList.length > 0) {
         return Promise.reject();
       }
     }
-  ),
-  check("items", "List must have items").isArray({ min: 1 }),
-  check("items.*.todo", "Todo item cannot be empty")
-    .not()
-    .isEmpty(),
-  check("items", "There are duplicate todo items").custom(
-    async (input, req) => {
-      const todosCounts = input
-        .map(x => x.todo)
-        .reduce((todoCount, todo) => {
-          const count = todoCount[todo] || 0;
-          todoCount[todo] = count + 1;
-          return todoCount;
-        }, {});
-      const keys = Object.keys(todosCounts);
-      for (const key of keys) {
-        if (todosCounts[key] > 1) {
-          return Promise.reject();
-        }
+  )
+];
+const updateValidationHandlers = [
+  check('title', 'There is already a list with this title').custom(
+    async (input, { req }) => {
+      const todoList = await TodoList.find({
+        title: input,
+        _id: { $ne: req.params.id }
+      });
+      if (todoList.length > 0) {
+        return Promise.reject();
       }
     }
   )
 ];
+// // @route GET api/todo-lists
+// // @desc Get all todo lists
+// // @access Public
+// router.get('/', async (req, res) => {
+//   try {
+//     const todoLists = await TodoList.find();
+//     res.json(todoLists);
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).send();
+//   }
+// });
 
 // @route GET api/todo-lists
 // @desc Get all todo lists
 // @access Public
-router.get("/", async (req, res) => {
-  try {
-    const todoLists = await TodoList.find();
-    res.json(todoLists);
-  } catch (e) {
-    console.error(e);
-    res.status(500).send();
-  }
-});
-// @route GET api/todo-lists
-// @desc Get all todo lists
-// @access Public
-router.get("/lists", async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     let todoLists = await TodoList.find();
     todoLists = todoLists.map(list => {
       return {
         _id: list._id,
+        items: list.items,
         title: list.title,
         createdAt: list.createdAt,
         itemCount: list.items.length,
-        finishedItemCount: list.items.filter(item => item.completed).length
+        completedItemCount: list.items.filter(item => item.completed).length
       };
     });
     res.json(todoLists);
@@ -96,7 +112,7 @@ router.get("/lists", async (req, res) => {
 // @route GET api/todo-lists/:id
 // @desc Get a todo list with the specified id
 // @access Public
-router.get("/:id", async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
     const todoList = await TodoList.findById(req.params.id);
     if (!todoList) {
@@ -112,8 +128,8 @@ router.get("/:id", async (req, res) => {
 // @desc Add new todo list
 // @access Public
 router.post(
-  "/",
-  [...sanitizerHandlers, ...validationHandlers],
+  '/',
+  [...sanitizerHandlers, ...commonValidationHandlers, ...addValidationHandlers],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -144,8 +160,12 @@ router.post(
 // @desc Update a todo list
 // @access Public
 router.put(
-  "/:id",
-  [...sanitizerHandlers, ...validationHandlers],
+  '/:id',
+  [
+    ...sanitizerHandlers,
+    ...commonValidationHandlers,
+    ...updateValidationHandlers
+  ],
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -162,7 +182,6 @@ router.put(
         const itemIndex = items.findIndex(item =>
           todoList.items[i]._id.equals(item._id)
         );
-        console.log(itemIndex);
         if (itemIndex === -1) {
           if (!todoList.items[i].isNew) {
             todoList.items.splice(i, 1);
@@ -196,7 +215,7 @@ router.put(
 // @route DELETE api/todo-lists/:id
 // @desc Delete a todo list
 // @access Public
-router.delete("/:id", async (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
     const todoList = await TodoList.findById(req.params.id);
     if (!todoList) {
@@ -209,8 +228,5 @@ router.delete("/:id", async (req, res) => {
     res.status(500).send();
   }
 });
-
-
-
 
 module.exports = router;
