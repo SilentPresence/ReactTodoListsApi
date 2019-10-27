@@ -171,39 +171,39 @@ router.put(
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
-    const { title, items } = req.body;
     try {
-      const todoList = await TodoList.findById(req.params.id);
-      if (!todoList) {
+      const dbTodoList = await TodoList.findById(req.params.id);
+      if (!dbTodoList) {
         return res.status(404);
       }
-      todoList.title = title;
-      for (let i = todoList.items.length - 1; i >= 0; --i) {
-        const itemIndex = items.findIndex(item =>
-          todoList.items[i]._id.equals(item._id)
+      const { title: savedTitle, items: savedItems } = req.body;
+      dbTodoList.title = savedTitle;
+      //Iterate backwards to prevent skipping items in case one of the items will be deleted
+      for (let i = dbTodoList.items.length - 1; i >= 0; --i) {
+        const dbTodoItem = dbTodoList.items[i];
+        const savedItem = savedItems.find(item =>
+          dbTodoItem._id.equals(item._id)
         );
-        if (itemIndex === -1) {
-          if (!todoList.items[i].isNew) {
-            todoList.items.splice(i, 1);
-          }
-        } else {
-          todoList.items[i].todo = items[itemIndex].todo;
-          todoList.items[i].completed = items[itemIndex].completed;
+        //If the current item from db does not exist in the saved items, delete it
+        if (!savedItem) {
+          dbTodoList.items.splice(i, 1);
+        }
+        //Else update the db item using the saved item
+        else {
+          dbTodoItem.todo = savedItem.todo;
+          dbTodoItem.completed = savedItem.completed;
         }
       }
-      for (let i = 0; i < items.length; ++i) {
-        // const itemIndex = todoList.items.findIndex(item => item._id.equal(sanitizedItems[i]._id));
-        // console.log(sanitizedItems[i]._id);
-        if (!items[i]._id) {
-          todoList.items.push({
-            todo: items[i].todo,
-            completed: items[i].completed
+      for (const savedTodoItem of savedItems) {
+        if (!savedTodoItem._id) {
+          dbTodoList.items.push({
+            todo: savedTodoItem.todo,
+            completed: savedTodoItem.completed
           });
         }
       }
 
-      // todoList.items = sanitizedItems;
-      const newTodoList = await todoList.save();
+      const newTodoList = await dbTodoList.save();
       res.json(newTodoList);
     } catch (e) {
       console.error(e);
